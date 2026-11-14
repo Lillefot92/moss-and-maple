@@ -134,6 +134,20 @@ input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;bac
 .menu svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .menu .chk{margin-left:auto;color:var(--sage-d);font-weight:700}
 .menu hr{border:0;border-top:1px solid var(--line);margin:4px 8px}
+#menu .snd{padding:10px 12px;min-width:260px}
+.snd-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.snd-row b{font-weight:700}
+.tgl{width:50px;height:30px;border-radius:999px;background:var(--line);position:relative;transition:background .2s}
+.tgl i{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .2s}
+.tgl.on{background:var(--sage)}.tgl.on i{left:23px}
+.seg{display:flex;background:var(--bg2);border-radius:12px;padding:3px;gap:2px;margin:4px 0 2px}
+.seg button{flex:1;padding:8px 6px;border-radius:9px;font-weight:700;font-size:13px;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.menu .snd button.tgl{width:50px;height:30px;padding:0;display:block;flex:none;border-radius:999px}
+.menu .snd button.tgl.on{background:var(--sage)}
+.menu .seg button{display:block;width:auto;flex:1;text-align:center;padding:8px 6px;border-radius:9px}
+.menu .seg button.on{background:var(--card)}
+.snd-note{font-size:12px;color:var(--muted);margin:10px 0 0}
 #preview img{width:100%;border-radius:12px;display:block;margin:0 0 14px;box-shadow:var(--shadow);-webkit-touch-callout:default;user-select:auto;-webkit-user-select:auto}
 #toast{position:fixed;left:50%;bottom:calc(150px + var(--sb));transform:translateX(-50%);background:rgba(58,49,42,.88);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;font-weight:600;z-index:30;pointer-events:none;transition:opacity .3s;max-width:90vw;text-align:center}
 @keyframes fade{from{opacity:0}to{opacity:1}}
@@ -152,7 +166,7 @@ input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;bac
     <div id="continue"></div>
     <div id="seasons"></div>
     <div class="foot">
-      <p><b>Tips:</b> Paint with your finger or Apple Pencil. Pinch with two fingers to zoom, and tap with two fingers to undo. Once you've used Apple Pencil, your fingers only move and zoom the page, so your palm won't leave marks. With <b>Stay inside the lines</b> turned on, each stroke stays in the shape where it started.</p>
+      <p><b>Tips:</b> Paint with your finger or Apple Pencil. Pinch with two fingers to zoom, and tap with two fingers to undo. Once you've used Apple Pencil, your fingers only move and zoom the page, so your palm won't leave marks. With <b>Stay inside the lines</b> turned on, each stroke stays in the shape where it started. Tap the <b>speaker</b> for cozy drawing sounds, soft rain or a crackling fireplace.</p>
       <p id="homeTip"></p>
     </div>
   </div>
@@ -166,6 +180,7 @@ input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;bac
     <button class="ibtn" id="redoBtn" title="Redo" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg></button>
     <div class="ttl"><span id="pgSeason"></span><b id="pgTitle"></b></div>
     <button class="ibtn on" id="linesBtn" title="Stay inside the lines" aria-label="Stay inside the lines"><svg viewBox="0 0 24 24"><path d="M4 7c3-3 6 2 9-1s5-1 7 1v10c-2 2-4 1-7 1s-6-4-9-1z"/><path d="M8 11c2 1 5 2 8 0" stroke-dasharray="2 2.5"/></svg></button>
+    <button class="ibtn" id="soundBtn" title="Sounds" aria-label="Sounds"></button>
     <button class="ibtn" id="moreBtn" title="More" aria-label="More options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg></button>
   </header>
   <div id="stage">
@@ -540,6 +555,8 @@ function beginStroke(e){
   stroke = {id:e.pointerId, type:e.pointerType, t0:performance.now(), tool:S.tool, color:S.color, masked,
             size:brushSize(), op:brushOp(), sm:pt, last:pt, lastSize:null, carry:0, rect:null, moved:0, raw:null, rawP:1};
   cLive.style.opacity = stroke.tool === 'eraser' ? 1 : stroke.op;
+  stroke.cx = e.clientX; stroke.cy = e.clientY; stroke.ct = e.timeStamp; stroke.spd = 0;
+  Sound.begin(stroke.tool);
   rctx.fillStyle = '#000';
   const s = stroke.size * pressureOf(e);
   dab(pt.x, pt.y, s); stroke.lastSize = s; scheduleRender();
@@ -567,12 +584,16 @@ function extendStroke(e){
   const evs = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
   const k = stroke.type === 'pen' ? 0.6 : 0.45;
   for (const ev of evs) { const p = toCanvas(ev); stroke.raw = p; stroke.rawP = pressureOf(ev); addPoint(p, stroke.rawP, k); }
+  const dt = Math.max(4, e.timeStamp - stroke.ct), d = Math.hypot(e.clientX - stroke.cx, e.clientY - stroke.cy);
+  stroke.spd = stroke.spd * 0.6 + (d / dt) * 0.4; stroke.cx = e.clientX; stroke.cy = e.clientY; stroke.ct = e.timeStamp;
+  Sound.move(stroke.spd, e.pointerType === 'pen' ? (e.pressure || 0.5) * 1.4 : 0.8);
   scheduleRender();
 }
 function endStroke(){
   if (!stroke) return;
   if (stroke.fill) { const st = stroke; stroke = null; if (st.moved < 24) doFill(st.pt); return; }
   if (stroke.raw) { addPoint(stroke.raw, stroke.rawP, 1); }
+  Sound.end();
   const st = stroke; stroke = null;
   if (pendRect) { renderLive(pendRect, st.tool, st.color, st.masked); pendRect = null; }
   commit(st.rect, st.tool === 'eraser' ? 'destination-out' : 'source-over', st.tool === 'eraser' ? 1 : st.op);
@@ -581,6 +602,7 @@ function endStroke(){
 function cancelStroke(){
   if (!stroke) return;
   if (stroke.fill) { stroke = null; return; }
+  Sound.end();
   const r = clipRect(stroke.rect); stroke = null; pendRect = null;
   lctx.clearRect(r.x, r.y, r.w, r.h); rctx.clearRect(r.x, r.y, r.w, r.h);
 }
@@ -601,6 +623,7 @@ function doFill(pt){
   cLive.style.opacity = 1;
   renderLive(rect, 'fill', S.color, true);
   commit(rect, 'source-over', brushOp('fill'));
+  Sound.drip();
   rememberColor(S.color);
 }
 
@@ -819,7 +842,8 @@ const MI = {
 function closeMenu(){ $('#menu').classList.add('hidden'); }
 $('#moreBtn').onclick = (e) => {
   e.stopPropagation(); const m = $('#menu');
-  if (!m.classList.contains('hidden')) { closeMenu(); return; }
+  if (!m.classList.contains('hidden') && m.dataset.kind === 'more') { closeMenu(); return; }
+  m.dataset.kind = 'more';
   m.innerHTML = `
     <button data-a="save"><svg viewBox="0 0 24 24">${MI.save}</svg>Save as picture</button>
     <button data-a="fit"><svg viewBox="0 0 24 24">${MI.fit}</svg>Fit page to screen</button>
@@ -834,7 +858,7 @@ $('#moreBtn').onclick = (e) => {
     if (a === 'reset') confirmReset();
   });
 };
-document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu') && !e.target.closest('#moreBtn')) closeMenu(); });
+document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu') && !e.target.closest('#moreBtn') && !e.target.closest('#soundBtn')) closeMenu(); });
 
 function dialog(html){
   const s = document.createElement('div'); s.className = 'scrim'; s.innerHTML = `<div class="dlg" role="dialog">${html}</div>`;
@@ -880,6 +904,216 @@ async function exportPicture(){
     catch (e) { hint.textContent = 'Press and hold the picture above to save it to Photos.'; }
   };
 }
+
+/* ----------------------------------------------------------------- sound */
+// Every sound is generated live with Web Audio, so there are no files to load.
+const Sound = (() => {
+  const cfg = {draw:prefs.get('sDraw', true), drawVol:prefs.get('sDrawVol', 0.7), amb:prefs.get('sAmb', 'off'), ambVol:prefs.get('sAmbVol', 0.5)};
+  let ctx = null, master, drawBus, ambBus, analyser, B = {}, voice = null, amb = null, unlocked = false;
+  const PRESETS = {
+    pencil:{buf:'pencil', hp:1100, bp:3600, q:0.8, lp:9000, gain:1.6, rate:[0.8, 1.35]},
+    brush:{buf:'pink', hp:350, bp:1700, q:0.55, lp:4200, gain:1.15, rate:[0.85, 1.15]},
+    water:{buf:'wet', hp:160, bp:750, q:0.5, lp:1700, gain:1.5, rate:[0.8, 1.1]},
+    eraser:{buf:'rub', hp:250, bp:850, q:0.9, lp:2600, gain:1.25, rate:[0.8, 1.25]},
+  };
+  function ensure(){
+    if (ctx) return ctx;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    try { ctx = new AC({latencyHint:'interactive'}); } catch (e) { return null; }
+    master = ctx.createGain(); master.gain.value = 0.9;
+    analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
+    master.connect(analyser); analyser.connect(ctx.destination);
+    drawBus = ctx.createGain(); drawBus.gain.value = cfg.drawVol; drawBus.connect(master);
+    ambBus = ctx.createGain(); ambBus.gain.value = cfg.ambVol; ambBus.connect(master);
+    makeBuffers();
+    return ctx;
+  }
+  function makeBuffers(){
+    const sr = ctx.sampleRate, n = sr * 3;
+    const mk = (fill) => { const b = ctx.createBuffer(1, n, sr); fill(b.getChannelData(0)); return b; };
+    const norm = (d, peak) => { let m = 0; for (let i = 0; i < d.length; i++) m = Math.max(m, Math.abs(d[i])); for (let i = 0; i < d.length; i++) d[i] *= peak / (m || 1); };
+    const fade = (d) => { const f = Math.floor(sr * 0.05); for (let i = 0; i < f; i++) { const t = i / f; const a = d[i], b2 = d[d.length - f + i]; d[d.length - f + i] = b2 * (1 - t) + a * t; } };
+    B.white = mk(d => { for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; });
+    B.pink = mk(d => { let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0; for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; b0 = .99886 * b0 + w * .0555179; b1 = .99332 * b1 + w * .0750759; b2 = .969 * b2 + w * .153852; b3 = .8665 * b3 + w * .3104856; b4 = .55 * b4 + w * .5329522; b5 = -.7616 * b5 - w * .016898; d[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * .5362; b6 = w * .115926; } norm(d, .9); fade(d); });
+    B.brown = mk(d => { let l = 0; for (let i = 0; i < d.length; i++) { l = (l + .02 * (Math.random() * 2 - 1)) / 1.02; d[i] = l; } norm(d, .9); fade(d); });
+    // pencil: noise broken into tiny grains (paper tooth) with the odd tick of graphite
+    B.pencil = mk(d => {
+      let env = .6, target = .6, k = 0;
+      for (let i = 0; i < d.length; i++) {
+        if (--k <= 0) { k = Math.floor(sr * (0.002 + Math.random() * 0.009)); target = Math.random() < .12 ? .12 : .35 + Math.random() * .65; }
+        env += (target - env) * 0.02;
+        let v = (Math.random() * 2 - 1) * env;
+        if (Math.random() < 28 / sr) v += (Math.random() < .5 ? -1 : 1) * (0.8 + Math.random() * 0.6);
+        d[i] = v;
+      }
+      norm(d, .95); fade(d);
+    });
+    // rubber eraser: lower, lumpier grain
+    B.rub = mk(d => {
+      let env = .6, target = .6, k = 0, l = 0;
+      for (let i = 0; i < d.length; i++) {
+        if (--k <= 0) { k = Math.floor(sr * (0.006 + Math.random() * 0.02)); target = .3 + Math.random() * .7; }
+        env += (target - env) * 0.01; l = l * 0.6 + (Math.random() * 2 - 1) * 0.4; d[i] = l * env;
+      }
+      norm(d, .95); fade(d);
+    });
+    // watercolor: soft pink noise that swells gently, like a wet brush
+    B.wet = mk(d => {
+      const p = B.pink.getChannelData(0); let ph = 0;
+      for (let i = 0; i < d.length; i++) { ph += (2.2 + Math.sin(i / sr * 0.7)) / sr; d[i] = p[i] * (0.65 + 0.35 * Math.sin(ph * Math.PI * 2)); }
+      norm(d, .9); fade(d);
+    });
+  }
+  function unlock(){
+    const c = ensure(); if (!c) return;
+    if (c.state !== 'running') c.resume().then(() => { if (!unlocked) { unlocked = true; startAmbient(); } }).catch(() => {});
+    else if (!unlocked) { unlocked = true; startAmbient(); }
+    try { const s = c.createBufferSource(); s.buffer = c.createBuffer(1, 1, 22050); s.connect(c.destination); s.start(0); } catch (e) {}
+  }
+  const now = () => ctx.currentTime;
+  function filt(type, f, q){ const x = ctx.createBiquadFilter(); x.type = type; x.frequency.value = f; if (q != null) x.Q.value = q; return x; }
+
+  // ------------------------------------------------ drawing voice
+  function begin(tool){
+    if (!cfg.draw || !ctx || ctx.state !== 'running' || !PRESETS[tool]) return;
+    end();
+    const p = PRESETS[tool];
+    const src = ctx.createBufferSource(); src.buffer = B[p.buf]; src.loop = true;
+    const hp = filt('highpass', p.hp, 0.7), bp = filt('bandpass', p.bp, p.q), lp = filt('lowpass', p.lp, 0.7);
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(hp); hp.connect(bp); bp.connect(lp); lp.connect(g); g.connect(drawBus);
+    src.start(0, Math.random() * 2.5);
+    voice = {src, g, bp, p, t:0};
+  }
+  function move(speed, pressure){
+    if (!voice) return;
+    const p = voice.p, t = now();
+    const s = Math.min(1, speed / 1.4);
+    const level = p.gain * Math.pow(s, 0.55) * (0.5 + 0.5 * Math.min(1, pressure));
+    voice.g.gain.cancelScheduledValues(t);
+    voice.g.gain.setTargetAtTime(level, t, 0.025);
+    voice.g.gain.setTargetAtTime(0, t + 0.07, 0.05);
+    voice.src.playbackRate.setTargetAtTime(p.rate[0] + (p.rate[1] - p.rate[0]) * s, t, 0.05);
+    voice.bp.frequency.setTargetAtTime(p.bp * (0.85 + 0.3 * Math.min(1, pressure)), t, 0.05);
+  }
+  function end(){
+    if (!voice) return; const v = voice; voice = null; const t = now();
+    v.g.gain.cancelScheduledValues(t); v.g.gain.setTargetAtTime(0, t, 0.04);
+    try { v.src.stop(t + 0.4); } catch (e) {}
+  }
+  function drip(){
+    if (!cfg.draw || !ctx || ctx.state !== 'running') return;
+    const t = now(), o = ctx.createOscillator(), g = ctx.createGain(), lp = filt('lowpass', 1800, 0.7);
+    o.type = 'sine'; o.frequency.setValueAtTime(720, t); o.frequency.exponentialRampToValueAtTime(330, t + 0.14);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+    o.connect(lp); lp.connect(g); g.connect(drawBus); o.start(t); o.stop(t + 0.35);
+    const n = ctx.createBufferSource(), ng = ctx.createGain(), bp = filt('bandpass', 1400, 1.2);
+    n.buffer = B.pink; ng.gain.setValueAtTime(0.18, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    n.connect(bp); bp.connect(ng); ng.connect(drawBus); n.start(t, Math.random() * 2); n.stop(t + 0.15);
+  }
+
+  // ------------------------------------------------ background sounds
+  function loopSrc(buf, nodes, gain){
+    const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true;
+    let last = s; for (const n of nodes) { last.connect(n); last = n; }
+    const g = ctx.createGain(); g.gain.value = gain; last.connect(g); s.start(0, Math.random() * 2.5);
+    return {s, g};
+  }
+  function burst(t, dur, f, q, peak, type = 'bandpass', buf = 'white'){
+    const s = ctx.createBufferSource(), fl = filt(type, f, q), g = ctx.createGain();
+    s.buffer = B[buf]; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(fl); fl.connect(g); g.connect(amb.out); s.start(t, Math.random() * 2.5); s.stop(t + dur + 0.02);
+  }
+  function startAmbient(){
+    stopAmbient();
+    if (cfg.amb === 'off' || !ctx || ctx.state !== 'running') return;
+    const out = ctx.createGain(); out.gain.value = 0; out.connect(ambBus);
+    out.gain.setTargetAtTime(1, now(), 0.8);
+    amb = {kind:cfg.amb, out, parts:[], timer:0, next:now()};
+    if (cfg.amb === 'rain') {
+      const a = loopSrc(B.pink, [filt('highpass', 450, 0.6), filt('lowpass', 3200, 0.5)], 0.55);
+      const b = loopSrc(B.brown, [filt('lowpass', 260, 0.6)], 0.32);
+      for (const x of [a, b]) { x.g.connect(out); amb.parts.push(x); }
+      amb.swell = a.g;
+    } else if (cfg.amb === 'fire') {
+      const a = loopSrc(B.brown, [filt('lowpass', 420, 0.7)], 0.75);
+      const b = loopSrc(B.pink, [filt('bandpass', 900, 0.8)], 0.06);
+      for (const x of [a, b]) { x.g.connect(out); amb.parts.push(x); }
+      amb.swell = a.g;
+    }
+    amb.timer = setInterval(schedule, 90); schedule();
+  }
+  function schedule(){
+    if (!amb || !ctx || ctx.state !== 'running') return;
+    const horizon = now() + 0.25;
+    while (amb.next < horizon) {
+      const t = Math.max(amb.next, now() + 0.01);
+      if (amb.kind === 'rain') {
+        // soft patter of drops on leaves and the window
+        burst(t, 0.02 + Math.random() * 0.03, 1800 + Math.random() * 4200, 3 + Math.random() * 4, 0.04 + Math.random() * 0.1);
+        amb.next = t + 0.006 + Math.random() * 0.05;
+      } else {
+        const r = Math.random();
+        if (r < 0.08) burst(t, 0.05 + Math.random() * 0.05, 500 + Math.random() * 500, 1.5, 0.35 + Math.random() * 0.25); // a pop
+        else { const n = 1 + Math.floor(Math.random() * 4); for (let i = 0; i < n; i++) burst(t + i * (0.004 + Math.random() * 0.02), 0.004 + Math.random() * 0.012, 2000 + Math.random() * 3500, 0.8, 0.12 + Math.random() * 0.3, 'highpass'); }
+        amb.next = t + 0.03 + Math.pow(Math.random(), 2) * 0.6;
+      }
+    }
+    if (amb.swell && Math.random() < 0.03) amb.swell.gain.setTargetAtTime((amb.kind === 'rain' ? 0.55 : 0.75) * (0.75 + Math.random() * 0.4), now(), 1.2);
+  }
+  function stopAmbient(){
+    if (!amb) return; const a = amb; amb = null; clearInterval(a.timer);
+    const t = now(); a.out.gain.cancelScheduledValues(t); a.out.gain.setTargetAtTime(0, t, 0.3);
+    setTimeout(() => { for (const p of a.parts) { try { p.s.stop(); } catch (e) {} } try { a.out.disconnect(); } catch (e) {} }, 1500);
+  }
+
+  // ------------------------------------------------ settings
+  function set(k, v){
+    cfg[k] = v; prefs.set({draw:'sDraw', drawVol:'sDrawVol', amb:'sAmb', ambVol:'sAmbVol'}[k], v);
+    if (!ctx) return;
+    if (k === 'drawVol') drawBus.gain.setTargetAtTime(v, now(), 0.05);
+    if (k === 'ambVol') ambBus.gain.setTargetAtTime(v, now(), 0.05);
+    if (k === 'draw' && !v) end();
+    if (k === 'amb') startAmbient();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!ctx) return;
+    if (document.hidden) { end(); ctx.suspend().catch(() => {}); }
+    else if (unlocked) ctx.resume().catch(() => {});
+  });
+  for (const ev of ['pointerdown', 'pointerup', 'click', 'keydown']) document.addEventListener(ev, unlock, {capture:true, passive:true});
+  return {cfg, begin, move, end, drip, set, unlock, level(){ if (!analyser) return 0; const a = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(a); let s = 0; for (const v of a) s += v * v; return Math.sqrt(s / a.length); }, state(){ return ctx ? ctx.state : 'none'; }};
+})();
+
+function openSoundPanel(){
+  const m = $('#menu');
+  if (!m.classList.contains('hidden') && m.dataset.kind === 'sound') { closeMenu(); return; }
+  const c = Sound.cfg;
+  m.dataset.kind = 'sound';
+  m.innerHTML = `
+    <div class="snd">
+      <div class="snd-row"><b>Drawing sounds</b><button class="tgl ${c.draw ? 'on' : ''}" data-k="draw" role="switch" aria-checked="${c.draw}" aria-label="Drawing sounds"><i></i></button></div>
+      <input type="range" min="0" max="100" value="${Math.round(c.drawVol * 100)}" data-v="drawVol" aria-label="Drawing sound volume">
+      <div class="snd-row" style="margin-top:12px"><b>Background</b></div>
+      <div class="seg">${[['off', 'Off'], ['rain', 'Soft rain'], ['fire', 'Fireplace']].map(([k, l]) => `<button data-a="${k}" class="${c.amb === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <input type="range" min="0" max="100" value="${Math.round(c.ambVol * 100)}" data-v="ambVol" aria-label="Background volume">
+      <p class="snd-note">No sound? Check that your iPad or phone isn't on silent.</p>
+    </div>`;
+  m.classList.remove('hidden');
+  m.querySelector('[data-k="draw"]').onclick = (e) => { Sound.set('draw', !Sound.cfg.draw); e.currentTarget.classList.toggle('on', Sound.cfg.draw); e.currentTarget.setAttribute('aria-checked', Sound.cfg.draw); updateSoundBtn(); };
+  m.querySelectorAll('[data-v]').forEach(r => r.oninput = () => Sound.set(r.dataset.v, r.value / 100));
+  m.querySelectorAll('.seg button').forEach(b => b.onclick = () => { Sound.set('amb', b.dataset.a); m.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b)); updateSoundBtn(); });
+}
+function updateSoundBtn(){
+  const on = Sound.cfg.draw || Sound.cfg.amb !== 'off';
+  $('#soundBtn').classList.toggle('on', on && Sound.cfg.amb !== 'off');
+  $('#soundBtn').innerHTML = on
+    ? '<svg viewBox="0 0 24 24"><path d="M4 10v4h3.5L12 18V6L7.5 10z"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M4 10v4h3.5L12 18V6L7.5 10z"/><path d="M16 10l4 4M20 10l-4 4"/></svg>';
+}
+$('#soundBtn').onclick = (e) => { e.stopPropagation(); Sound.unlock(); openSoundPanel(); };
+updateSoundBtn();
 
 /* ---------------------------------------------------------------- boot */
 function boot(){
