@@ -1,11 +1,20 @@
 import json, subprocess, os, sys
 sys.path.insert(0, '.')
-import pages
+import pages, realgirls2, philippines, philippines2
 meta = pages.build('out')
-order = {'spring':0,'summer':1,'autumn':2,'winter':3}
-seq = {'spring-blossom':0,'spring-tulips':1,'spring-mandala':2,'summer-sunflowers':0,'summer-butterfly':1,'summer-sun':2,
-       'autumn-leaves':0,'autumn-mushrooms':1,'autumn-mandala':2,'winter-cabin':0,'winter-snowflakes':1,'winter-wreath':2}
+meta += realgirls2.build('rg2')
+ph = philippines.build('ph') + philippines2.build('ph2')
+for p in ph:
+    p['season'] = 'philippines'
+meta += ph
+order = {'spring':0,'summer':1,'autumn':2,'winter':3,'philippines':4}
+seq = {'spring-blossom':0,'spring-tulips':1,'spring-mandala':2,'rg2-spring-planting':3,
+       'summer-sunflowers':0,'summer-butterfly':1,'summer-sun':2,'rg2-summer-hammock':3,
+       'autumn-leaves':0,'autumn-mushrooms':1,'autumn-mandala':2,'rg2-autumn-apples':3,
+       'winter-cabin':0,'winter-snowflakes':1,'winter-wreath':2,'rg2-winter-skating':3,
+       'ph-carabao-terraces':0,'ph-salakot-sunset':1,'ph-sampaguita':2,'ph-bangka-beach':3,'ph-chocolate-hills':4,'ph-jeepney':5}
 meta.sort(key=lambda p:(order[p['season']], seq[p['id']]))
+print(len(meta), 'pages')
 app = open('app.html').read().replace('/*PAGES*/[]', json.dumps(meta, separators=(',',':')))
 os.makedirs('dist', exist_ok=True)
 open('dist/index.html','w').write(app)
