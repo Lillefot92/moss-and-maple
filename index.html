@@ -140,7 +140,7 @@ input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;bac
 .tgl{width:50px;height:30px;border-radius:999px;background:var(--line);position:relative;transition:background .2s}
 .tgl i{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .2s}
 .tgl.on{background:var(--sage)}.tgl.on i{left:23px}
-.seg{display:flex;background:var(--bg2);border-radius:12px;padding:3px;gap:2px;margin:4px 0 2px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--bg2);border-radius:12px;padding:3px;gap:2px;margin:4px 0 2px}
 .seg button{flex:1;padding:8px 6px;border-radius:9px;font-weight:700;font-size:13px;color:var(--muted)}
 .seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .menu .snd button.tgl{width:50px;height:30px;padding:0;display:block;flex:none;border-radius:999px}
@@ -166,7 +166,7 @@ input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;bac
     <div id="continue"></div>
     <div id="seasons"></div>
     <div class="foot">
-      <p><b>Tips:</b> Paint with your finger or Apple Pencil. Pinch with two fingers to zoom, and tap with two fingers to undo. Once you've used Apple Pencil, your fingers only move and zoom the page, so your palm won't leave marks. With <b>Stay inside the lines</b> turned on, each stroke stays in the shape where it started. Tap the <b>speaker</b> for cozy drawing sounds, gentle raindrops or a crackling fireplace.</p>
+      <p><b>Tips:</b> Paint with your finger or Apple Pencil. Pinch with two fingers to zoom, and tap with two fingers to undo. Once you've used Apple Pencil, your fingers only move and zoom the page, so your palm won't leave marks. With <b>Stay inside the lines</b> turned on, each stroke stays in the shape where it started. Tap the <b>speaker</b> for cozy drawing sounds and calm background sounds: forest birds, a babbling brook, raindrops or a crackling fireplace.</p>
       <p id="homeTip"></p>
     </div>
   </div>
@@ -1044,43 +1044,135 @@ const Sound = (() => {
     // the tiny soft tap of the drop landing
     if (Math.random() < 0.5) burst(t, 0.012, 1600 + Math.random() * 1600, 1.5, peak * 0.25, 'bandpass', 'pink');
   }
+  function makeVerb(seconds, wetGain){
+    try {
+      const conv = ctx.createConvolver(), len = Math.floor(ctx.sampleRate * seconds);
+      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+      conv.buffer = ir; const wet = ctx.createGain(); wet.gain.value = wetGain;
+      conv.connect(wet); wet.connect(amb.out); return conv;
+    } catch (e) { return null; }
+  }
+  function panner(v){
+    if (!ctx.createStereoPanner) return null;
+    const p = ctx.createStereoPanner(); p.pan.value = v; p.connect(amb.out); if (amb.verb) p.connect(amb.verb); return p;
+  }
+  // one sung note: a sine that glides from f0 to f1 with a soft envelope
+  function note(t, dur, f0, f1, peak, dest, vib = 0){
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
+    if (vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 18 + Math.random() * 14; lg.gain.value = f0 * vib; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t + dur + 0.02); }
+    const a = Math.min(0.012, dur * 0.3);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.setValueAtTime(peak, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + 0.02);
+  }
+  // a little phrase from one of four kinds of songbird, somewhere in the trees
+  function birdPhrase(t){
+    const pan = Math.random() * 1.6 - 0.8, far = 2.6 * (0.45 + Math.random() * 0.55);
+    const dest = panner(pan) || (() => { const g = ctx.createGain(); g.connect(amb.out); return g; })();
+    const kind = Math.random(); let len = 0;
+    if (kind < 0.3) { // warbler trill: quick falling notes
+      const n = 6 + Math.floor(Math.random() * 7), f = 3600 + Math.random() * 1400, d = 0.045 + Math.random() * 0.025;
+      for (let i = 0; i < n; i++) note(t + i * (d + 0.018), d, f * (1 + 0.04 * Math.sin(i)), f * 0.78, 0.18 * far, dest);
+      len = n * (d + 0.018);
+    } else if (kind < 0.55) { // two-note "tee-cher" call, repeated
+      const f1 = 4000 + Math.random() * 900, f2 = f1 * (0.72 + Math.random() * 0.08), r = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < r; i++) { const tt = t + i * 0.42; note(tt, 0.14, f1, f1 * 0.97, 0.16 * far, dest); note(tt + 0.17, 0.16, f2 * 1.03, f2, 0.14 * far, dest); }
+      len = r * 0.42;
+    } else if (kind < 0.85) { // robin-like warble: wandering whistled notes
+      const n = 3 + Math.floor(Math.random() * 5); let tt = t, f = 2400 + Math.random() * 1200;
+      for (let i = 0; i < n; i++) {
+        const d = 0.09 + Math.random() * 0.16, f2 = 2200 + Math.random() * 2000;
+        note(tt, d, f, f2, 0.15 * far, dest, Math.random() < 0.4 ? 0.02 : 0);
+        tt += d + 0.03 + Math.random() * 0.08; f = f2 * (0.9 + Math.random() * 0.2);
+      }
+      len = tt - t;
+    } else { // a far-off dove: soft low hoots
+      const f = 520 + Math.random() * 90, g2 = ctx.createGain(); g2.connect(dest);
+      const lp = filt('lowpass', 900, 0.7); lp.connect(g2);
+      note(t, 0.35, f * 1.08, f, 0.2 * far, lp); note(t + 0.48, 0.55, f, f * 0.94, 0.18 * far, lp); note(t + 1.15, 0.3, f * 0.98, f * 0.95, 0.14 * far, lp);
+      len = 1.5;
+    }
+    return len;
+  }
+  function bubble(t, lo, hi, peak){
+    const f0 = lo + Math.random() * (hi - lo), o = ctx.createOscillator(), g = ctx.createGain(), dec = 0.03 + Math.random() * 0.05;
+    o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * (1.4 + Math.random() * 0.6), t + dec);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+    const dest = panner(Math.random() * 1.2 - 0.6) || amb.out;
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dec + 0.02);
+  }
+  const BASE = {rain:0.3, fire:0.55, forest:0.4, brook:0.5};
   function startAmbient(){
     stopAmbient();
     if (cfg.amb === 'off' || !ctx || ctx.state !== 'running') return;
     const out = ctx.createGain(); out.gain.value = 0; out.connect(ambBus);
     out.gain.setTargetAtTime(1, now(), 0.8);
-    amb = {kind:cfg.amb, out, parts:[], timer:0, next:now()};
+    amb = {kind:cfg.amb, out, parts:[], timer:0, next:now(), verb:null};
+    const add = (...xs) => { for (const x of xs) { x.g.connect(out); amb.parts.push(x); } };
     if (cfg.amb === 'rain') {
       // a faint, warm hush of distant rain underneath the drops
-      const a = loopSrc(B.pink, [filt('highpass', 180, 0.6), filt('lowpass', 850, 0.5)], 0.26);
+      const a = loopSrc(B.pink, [filt('highpass', 180, 0.6), filt('lowpass', 850, 0.5)], BASE.rain);
       const b = loopSrc(B.brown, [filt('lowpass', 220, 0.6)], 0.14);
-      for (const x of [a, b]) { x.g.connect(out); amb.parts.push(x); }
-      amb.swell = a.g;
-      // a soft room echo makes the drops round and calm
-      try {
-        const conv = ctx.createConvolver(), len = Math.floor(ctx.sampleRate * 1.8);
-        const ir = ctx.createBuffer(2, len, ctx.sampleRate);
-        for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
-        conv.buffer = ir; const wet = ctx.createGain(); wet.gain.value = 0.6;
-        conv.connect(wet); wet.connect(out); amb.verb = conv;
-      } catch (e) { amb.verb = null; }
+      add(a, b); amb.swell = a.g;
+      amb.verb = makeVerb(1.8, 0.6); // a soft room echo makes the drops round and calm
     } else if (cfg.amb === 'fire') {
-      const a = loopSrc(B.brown, [filt('lowpass', 420, 0.7)], 0.75);
+      const a = loopSrc(B.brown, [filt('lowpass', 420, 0.7)], BASE.fire);
       const b = loopSrc(B.pink, [filt('bandpass', 900, 0.8)], 0.06);
-      for (const x of [a, b]) { x.g.connect(out); amb.parts.push(x); }
-      amb.swell = a.g;
+      add(a, b); amb.swell = a.g;
+    } else if (cfg.amb === 'forest') {
+      // breeze through the trees, leaves rustling, and birds now and then
+      amb.windF = filt('bandpass', 520, 0.6);
+      const a = loopSrc(B.pink, [amb.windF, filt('lowpass', 1400, 0.5)], BASE.forest);
+      const b = loopSrc(B.pink, [filt('highpass', 2600, 0.6), filt('lowpass', 7000, 0.5)], 0.025);
+      const c = loopSrc(B.brown, [filt('lowpass', 300, 0.6)], 0.12);
+      add(a, b, c); amb.swell = a.g; amb.rustle = b.g;
+      amb.verb = makeVerb(2.6, 0.5);
+      amb.next = now() + 1.2;
+    } else if (cfg.amb === 'brook') {
+      // the steady rush of a small stream, gurgles that wander, and little bubbles
+      const a = loopSrc(B.pink, [filt('highpass', 220, 0.6), filt('lowpass', 1300, 0.5)], BASE.brook);
+      const b = loopSrc(B.brown, [filt('lowpass', 380, 0.6)], 0.18);
+      add(a, b); amb.swell = a.g;
+      amb.gurgle = [];
+      for (let i = 0; i < 3; i++) {
+        const bp = filt('bandpass', 500 + i * 300, 7 + i * 2);
+        const x = loopSrc(i % 2 ? B.white : B.pink, [bp], 0.0);
+        add(x); amb.gurgle.push({bp, g:x.g});
+      }
+      amb.verb = makeVerb(1.2, 0.35);
     }
     amb.timer = setInterval(schedule, 90); schedule();
   }
   function schedule(){
     if (!amb || !ctx || ctx.state !== 'running') return;
     const horizon = now() + 0.25;
+    if (amb.kind === 'brook') {
+      for (const gu of amb.gurgle) for (let k = 0; k < 3; k++) {
+        const tt = now() + k * 0.03 + Math.random() * 0.02;
+        gu.bp.frequency.setTargetAtTime(300 + Math.random() * 1300, tt, 0.025);
+        gu.g.gain.setTargetAtTime(Math.random() < 0.35 ? 0 : 0.35 + Math.random() * 0.75, tt, 0.03);
+      }
+    }
+    if (amb.kind === 'forest' && Math.random() < 0.04) {
+      amb.windF.frequency.setTargetAtTime(380 + Math.random() * 380, now(), 1.8);
+      amb.rustle.gain.setTargetAtTime(0.01 + Math.random() * 0.04, now(), 1.2);
+    }
     while (amb.next < horizon) {
       const t = Math.max(amb.next, now() + 0.01);
       if (amb.kind === 'rain') {
         drop(t);
         if (Math.random() < 0.12) drop(t + 0.05 + Math.random() * 0.12, true); // a little drip right after
         amb.next = t - Math.log(1 - Math.random()) * 0.11;  // about 9 drops a second, at random
+      } else if (amb.kind === 'forest') {
+        const len = birdPhrase(t);
+        // sometimes a second bird answers
+        if (Math.random() < 0.3) birdPhrase(t + len + 0.3 + Math.random() * 0.8);
+        amb.next = t + len + 1.8 + Math.random() * 5;
+      } else if (amb.kind === 'brook') {
+        bubble(t, 500, 1600, 0.08 + Math.random() * 0.13);
+        amb.next = t - Math.log(1 - Math.random()) * 0.07;
       } else {
         const r = Math.random();
         if (r < 0.08) burst(t, 0.05 + Math.random() * 0.05, 500 + Math.random() * 500, 1.5, 0.35 + Math.random() * 0.25); // a pop
@@ -1088,7 +1180,7 @@ const Sound = (() => {
         amb.next = t + 0.03 + Math.pow(Math.random(), 2) * 0.6;
       }
     }
-    if (amb.swell && Math.random() < 0.03) amb.swell.gain.setTargetAtTime((amb.kind === 'rain' ? 0.26 : 0.75) * (0.75 + Math.random() * 0.4), now(), 1.2);
+    if (amb.swell && Math.random() < 0.03) amb.swell.gain.setTargetAtTime(BASE[amb.kind] * (0.75 + Math.random() * 0.4), now(), 1.2);
   }
   function stopAmbient(){
     if (!amb) return; const a = amb; amb = null; clearInterval(a.timer);
@@ -1124,7 +1216,7 @@ function openSoundPanel(){
       <div class="snd-row"><b>Drawing sounds</b><button class="tgl ${c.draw ? 'on' : ''}" data-k="draw" role="switch" aria-checked="${c.draw}" aria-label="Drawing sounds"><i></i></button></div>
       <input type="range" min="0" max="100" value="${Math.round(c.drawVol * 100)}" data-v="drawVol" aria-label="Drawing sound volume">
       <div class="snd-row" style="margin-top:12px"><b>Background</b></div>
-      <div class="seg">${[['off', 'Off'], ['rain', 'Raindrops'], ['fire', 'Fireplace']].map(([k, l]) => `<button data-a="${k}" class="${c.amb === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="seg">${[['off', 'Off'], ['forest', 'Forest'], ['brook', 'Brook'], ['rain', 'Raindrops'], ['fire', 'Fireplace']].map(([k, l]) => `<button data-a="${k}" class="${c.amb === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <input type="range" min="0" max="100" value="${Math.round(c.ambVol * 100)}" data-v="ambVol" aria-label="Background volume">
       <p class="snd-note">No sound? Check that your iPad or phone isn't on silent.</p>
     </div>`;
