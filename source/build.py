@@ -1,9 +1,9 @@
 import json, subprocess, os, sys
 sys.path.insert(0, '.')
-import pages, realgirls2, philippines, philippines2, landscapes
+import pages, realgirls2, philippines, philippines2, landscapes, landscapes_winter
 meta = pages.build('out')
 meta += realgirls2.build('rg2')
-ls = landscapes.build('ls')
+ls = landscapes.build('ls') + landscapes_winter.build('lsw')
 for p in ls:
     p['season'] = 'landscapes'
 meta += ls
@@ -16,7 +16,7 @@ seq = {'spring-blossom':0,'spring-tulips':1,'spring-mandala':2,'rg2-spring-plant
        'summer-sunflowers':0,'summer-butterfly':1,'summer-sun':2,'rg2-summer-hammock':3,
        'autumn-leaves':0,'autumn-mushrooms':1,'autumn-mandala':2,'rg2-autumn-apples':3,
        'winter-cabin':0,'winter-snowflakes':1,'winter-wreath':2,'rg2-winter-skating':3,
-       'ls-misty-lake':0,'ls-waterfall':1,'ls-red-cottage':2,'ls-alpine-meadow':3,
+       'ls-misty-lake':0,'ls-frozen-lake':1,'ls-waterfall':2,'ls-red-cottage':3,'ls-alpine-meadow':4,'ls-snowy-alpine':5,
        'ph-carabao-terraces':0,'ph-salakot-sunset':1,'ph-sampaguita':2,'ph-bangka-beach':3,'ph-chocolate-hills':4,'ph-jeepney':5}
 meta.sort(key=lambda p:(order[p['season']], seq[p['id']]))
 print(len(meta), 'pages')
